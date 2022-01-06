@@ -100,10 +100,77 @@ exports.getAllReservations = getAllReservations;
  */
 const getAllProperties = function(options, limit = 10) {
   
+  const queryParams = [];
+
+  // BASE QUERY -----------------------------------------------------
+  let queryString = `
+  SELECT properties.*, AVG(property_reviews.rating) AS average_rating
+  FROM properties
+  JOIN property_reviews ON property_id = properties.id
+  `;
+
+  // CHECKING FOR OPTIONS ON FILTERS --------------------------------
+  if (Object.keys(options).length > 0) {
+    queryString += `WHERE
+    `;
+  }
+
+  if (options.city) {
+    queryParams.push(`%${options.city}%`);
+    queryString += `city LIKE $${queryParams.length}
+    `;
+  }
+
+  if (options.owner_id) {
+    queryParams.push(Number(options.owner_id));
+    queryString += `owner_id = $${queryParams.length}
+    `;
+  }
+
+  if (options.minimum_price_per_night) {
+    
+    if (queryParams.length > 0) {
+      queryString += `AND `;
+    }
+    
+    queryParams.push(Number(options.minimum_price_per_night) * 100);
+    queryString += `cost_per_night >= $${queryParams.length}
+    `;
+  }
+
+  if (options.maximum_price_per_night) {
+    
+    if (queryParams.length > 0) {
+      queryString += `AND `;
+    }
+    
+    queryParams.push(Number(options.maximum_price_per_night) * 100);
+    queryString += `cost_per_night <= $${queryParams.length}
+    `;
+  }
+
+  // GROUPING AND LIMIT ---------------------------------------------
+  queryString += `
+  GROUP BY properties.id
+  `
+  
+  if (options.minimum_rating) {
+    queryParams.push(Number(options.minimum_rating));
+
+    queryString += `HAVING AVG(property_reviews.rating) >= $${queryParams.length}
+    `;
+  }
+
+  queryParams.push(limit);
+  queryString += `
+  ORDER BY cost_per_night
+  LIMIT $${queryParams.length};
+  `;
+
+  console.log(queryString, queryParams);
+
   return pool
-    .query(`
-    SELECT * FROM properties LIMIT $1;
-    `, [limit])
+    .query(queryString, queryParams)
     .then(res => res.rows)
     .catch(err => console.log(err.message));
   
